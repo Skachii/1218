@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DS Ultimate Visualizer | 完整五大主題</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .node { transition: all 0.4s ease; border-width: 2px; z-index: 10; }
+        .highlight-code { background-color: #4338ca; color: white; padding: 2px 4px; border-radius: 4px; }
+        .canvas-bg { background: radial-gradient(circle, #1e293b 0%, #0f172a 100%); overflow: auto; }
+        .node-active { background-color: #fbbf24 !important; border-color: #d97706 !important; transform: scale(1.1); }
+        
+        /* 樹狀結構專用樣式 */
+        .tree-container { display: flex; flex-direction: column; align-items: center; }
+        .tree-children { display: flex; justify-content: center; gap: 2rem; margin-top: 2rem; position: relative; }
+        /* 裝飾線：簡單示意 */
+        .tree-children::before { content: ''; position: absolute; top: -1rem; left: 50%; width: 60%; height: 2px; background: #475569; transform: translateX(-50%); }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen font-sans">
+
+<header class="bg-indigo-700 text-white shadow-xl p-4 sticky top-0 z-50">
+    <div class="container mx-auto flex justify-between items-center">
+        <h1 class="text-xl font-bold tracking-tighter uppercase italic text-indigo-100">DS MASTER PRO</h1>
+        <div class="flex gap-2 md:gap-4 overflow-x-auto" id="nav-tabs">
+            <button onclick="changeTopic('arrays')" class="hover:bg-indigo-600 px-3 py-1 rounded transition whitespace-nowrap">Arrays</button>
+            <button onclick="changeTopic('stacks')" class="hover:bg-indigo-600 px-3 py-1 rounded transition whitespace-nowrap">Stacks/Queues</button>
+            <button onclick="changeTopic('linkedlists')" class="hover:bg-indigo-600 px-3 py-1 rounded transition whitespace-nowrap">Lists</button>
+            <button onclick="changeTopic('trees')" class="hover:bg-indigo-600 px-3 py-1 rounded transition whitespace-nowrap">Trees</button>
+            <button onclick="changeTopic('graphs')" class="hover:bg-indigo-600 px-3 py-1 rounded transition whitespace-nowrap">Graphs</button>
+        </div>
+    </div>
+</header>
+
+<main class="container mx-auto grid grid-cols-12 gap-6 p-6">
+    <div class="col-span-12 lg:col-span-8 space-y-4">
+        <div class="bg-white p-5 rounded-xl shadow-sm border-l-8 border-indigo-500">
+            <h2 id="title" class="text-2xl font-black text-slate-800 uppercase tracking-tight tracking-widest">Topic</h2>
+            <p id="desc" class="text-slate-500 mt-1 italic leading-relaxed">載入中...</p>
+        </div>
+
+        <div class="canvas-bg h-[550px] rounded-3xl shadow-inner flex items-center justify-center p-10 relative" id="display">
+            </div>
+    </div>
+
+    <div class="col-span-12 lg:col-span-4 space-y-4">
+        <div class="bg-white p-5 rounded-xl shadow-md border-t-4 border-indigo-500">
+            <h3 class="font-bold text-lg mb-3 text-slate-700 flex items-center">
+                <span class="mr-2">⚙️</span> 互動操作
+            </h3>
+            <div id="btn-group" class="flex flex-wrap gap-2"></div>
+        </div>
+
+        <div class="bg-slate-800 p-5 rounded-xl shadow-lg text-slate-300 font-mono text-xs leading-relaxed">
+            <h3 class="text-indigo-400 font-bold mb-3 uppercase tracking-widest border-b border-slate-700 pb-1">Pseudocode</h3>
+            <div id="code-area" class="space-y-1 text-xs"></div>
+        </div>
+    </div>
+</main>
+
+<script>
+    const display = document.getElementById('display');
+    const codeArea = document.getElementById('code-area');
+    let data = [];
+    let treeData = null;
+
+    const schemas = {
+        arrays: {
+            title: "Arrays (陣列)",
+            desc: "演示線性搜尋 (Linear Search)。會逐一檢查每個索引直到找到目標值。",
+            code: ["FOR i = 0 TO N-1:", "  IF Array[i] == Target:", "    RETURN Index i", "RETURN -1 (Not Found)"],
+            init: () => { data = [15, 42, 8, 23, 67, 31]; renderArray(); },
+            actions: { "線性搜尋 (23)": () => runArraySearch(23), "重置陣列": () => schemas.arrays.init() }
+        },
+        stacks: {
+            title: "Stacks & Queues",
+            desc: "Stack (堆疊) 為 LIFO；Queue (佇列) 為 FIFO。",
+            code: ["PUSH: 將元素放到最上方", "POP: 從最上方取出元素", "ENQUEUE: 放到隊伍尾端", "DEQUEUE: 從隊伍前端取出"],
+            init: () => { data = [10, 20]; renderStack(); },
+            actions: {
+                "Stack Push": () => { data.push(Math.floor(Math.random()*90)+10); renderStack(); },
+                "Stack Pop": () => { if(data.length) data.pop(); renderStack(); },
+                "Queue Enqueue": () => { data.push(Math.floor(Math.random()*90)+10); renderQueue(); },
+                "Queue Dequeue": () => { if(data.length) data.shift(); renderQueue(); }
+            }
+        },
+        linkedlists: {
+            title: "Linked Lists (鏈結串列)",
+            desc: "節點透過 next 指標相連，展示如何動態增加節點與指標指向。",
+            code: ["NewNode.next = Head", "Head = NewNode", "// 於頭部插入只需 O(1)"],
+            init: () => { data = [10, 20, 30]; renderList(); },
+            actions: {
+                "新增節點": () => { data.push(Math.floor(Math.random()*99)); renderList(); },
+                "清空串列": () => { data = []; renderList(); }
+            }
+        },
+        trees: {
+            title: "Binary Search Tree (BST)",
+            desc: "二元搜尋樹。左子樹節點恆小於父節點，右子樹恆大於父節點。",
+            code: ["IF val < node.val: 往左走", "ELSE IF val > node.val: 往右走", "IF null: 插入新節點"],
+            init: () => { treeData = { val: 50, left: null, right: null }; renderTree(); },
+            actions: {
+                "插入隨機值": () => {
+                    const val = Math.floor(Math.random()*90)+10;
+                    insertBST(treeData, val);
+                    renderTree();
+                },
+                "重置樹": () => schemas.trees.init()
+            }
+        },
+        graphs: {
+            title: "Graphs (圖形遍歷)",
+            desc: "演示 BFS (廣度優先搜尋)。使用 Queue 來探訪相鄰的節點。",
+            code: ["Queue.push(起始點)", "WHILE Queue 有值:", "  v = Queue.pop()", "  走訪 v 的所有鄰居"],
+            init: () => { renderGraph(); },
+            actions: { "執行 BFS": () => runBFS() }
+        }
+    };
+
+    // --- 各大資料結構渲染函數 ---
+    function renderArray() {
+        display.className = "canvas-bg h-[550px] rounded-3xl flex items-center justify-center gap-2 p-4";
+        display.innerHTML = data.map((v, i) => `<div id="node-${i}" class="node w-14 h-14 bg-white border-indigo-500 flex items-center justify-center rounded-lg font-bold shadow-md text-indigo-800">${v}</div>`).join('');
+    }
+
+    function renderStack() {
+        display.className = "canvas-bg h-[550px] rounded-3xl flex items-center justify-center p-4";
+        display.innerHTML = `<div class="flex flex-col-reverse border-b-8 border-x-4 border-slate-500 p-2 w-32 h-72 justify-start gap-2">
+            ${data.map(v => `<div class="w-full h-12 bg-indigo-500 text-white flex items-center justify-center rounded shadow-sm font-bold text-lg">${v}</div>`).join('')}
+        </div>`;
+    }
+
+    function renderQueue() {
+        display.className = "canvas-bg h-[550px] rounded-3xl flex items-center justify-center p-4";
+        display.innerHTML = `<div class="flex border-y-4 border-slate-500 p-2 h-24 items-center gap-2 min-w-[300px] justify-center">
+            ${data.map(v => `<div class="w-14 h-14 bg-orange-500 text-white flex items-center justify-center rounded-full shadow-lg font-bold text-lg">${v}</div>`).join('')}
+        </div>`;
+    }
+
+    function renderList() {
+        display.className = "canvas-bg h-[550px] rounded-3xl flex items-center justify-center gap-4 p-4 flex-wrap";
+        display.innerHTML = data.map((v, i) => `
+            <div class="flex items-center gap-2">
+                <div class="node w-14 h-14 bg-white rounded-full flex items-center justify-center font-bold border-indigo-500 shadow-md text-indigo-700">${v}</div>
+                ${i < data.length - 1 ? '<span class="text-indigo-300 font-bold text-xl">➔</span>' : '<span class="text-slate-500 text-xs font-bold">NULL</span>'}
+            </div>
+        `).join('');
+    }
+
+    // --- BST 二元樹專用邏輯 ---
+    function insertBST(node, val) {
+        if (val < node.val) {
+            if (!node.left) node.left = { val: val, left: null, right: null };
+            else insertBST(node.left, val);
+        } else if (val > node.val) {
+            if (!node.right) node.right = { val: val, left: null, right: null };
+            else insertBST(node.right, val);
+        }
+    }
+
+    function renderTree() {
+        display.className = "canvas-bg h-[550px] rounded-3xl flex items-start justify-center p-12 overflow-auto";
+        const buildHTML = (n) => {
+            if (!n) return `<div class="w-12 h-12"></div>`; // 佔位
+            return `
+                <div class="tree-container">
+                    <div class="node w-12 h-12 bg-white rounded-full flex items-center justify-center font-bold border-indigo-500 shadow-xl text-indigo-800">${n.val}</div>
+                    <div class="tree-children">
+                        ${buildHTML(n.left)}
+                        ${buildHTML(n.right)}
+                    </div>
+                </div>
+            `;
+        };
+        display.innerHTML = buildHTML(treeData);
+    }
+
+    function renderGraph() {
+        display.className = "canvas-bg h-[550px] rounded-3xl flex items-center justify-center p-4";
+        display.innerHTML = `
+            <div class="grid grid-cols-2 gap-20 relative">
+                <div id="g-0" class="node w-16 h-16 bg-white border-2 border-slate-400 rounded-full flex items-center justify-center font-bold text-slate-700 shadow-lg">1</div>
+                <div id="g-1" class="node w-16 h-16 bg-white border-2 border-slate-400 rounded-full flex items-center justify-center font-bold text-slate-700 shadow-lg">2</div>
+                <div id="g-2" class="node w-16 h-16 bg-white border-2 border-slate-400 rounded-full flex items-center justify-center font-bold text-slate-700 shadow-lg">3</div>
+                <div id="g-3" class="node w-16 h-16 bg-white border-2 border-slate-400 rounded-full flex items-center justify-center font-bold text-slate-700 shadow-lg">4</div>
+            </div>`;
+    }
+
+    // --- 演算法追蹤與主題切換 ---
+    async function runArraySearch(target) {
+        const lines = codeArea.children;
+        for(let i=0; i<data.length; i++) {
+            lines[0].classList.add('highlight-code');
+            const node = document.getElementById(`node-${i}`);
+            node.classList.add('node-active');
+            await new Promise(r => setTimeout(r, 600));
+            lines[0].classList.remove('highlight-code');
+            lines[1].classList.add('highlight-code');
+            await new Promise(r => setTimeout(r, 400));
+            if(data[i] === target) {
+                lines[2].classList.add('highlight-code');
+                node.style.backgroundColor = '#10b981';
+                node.style.color = 'white';
+                return;
+            }
+            lines[1].classList.remove('highlight-code');
+            node.classList.remove('node-active');
+        }
+    }
+
+    async function runBFS() {
+        for(let i=0; i<4; i++) {
+            document.getElementById(`g-${i}`).classList.add('node-active');
+            await new Promise(r => setTimeout(r, 700));
+        }
+    }
+
+    function changeTopic(key) {
+        const t = schemas[key];
+        document.getElementById('title').innerText = t.title;
+        document.getElementById('desc').innerText = t.desc;
+        codeArea.innerHTML = t.code.map(line => `<div class="p-1">${line}</div>`).join('');
+        const btnGroup = document.getElementById('btn-group');
+        btnGroup.innerHTML = '';
+        for(let label in t.actions) {
+            const b = document.createElement('button');
+            b.className = "bg-indigo-600 text-white px-3 py-2 rounded-lg hover:bg-indigo-800 transition text-sm font-medium shadow-sm active:scale-95";
+            b.innerText = label;
+            b.onclick = t.actions[label];
+            btnGroup.appendChild(b);
+        }
+        t.init();
+    }
+
+    window.onload = () => changeTopic('arrays');
+</script>
+</body>
+</html>
